@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""Main start-up point of AsterStudy application."""
+
+import argparse
+import os
+import os.path as osp
+import sys
+import traceback
+import salome
+
+LIBDIR = ''
+
+# Add libdir to sys.path...
+if LIBDIR != '@' 'LIBDIR' '@':
+    # ... for install tree.
+    if not osp.isabs(LIBDIR):
+        LIBDIR = osp.join(osp.dirname(osp.realpath(__file__)), LIBDIR)
+        LIBDIR = osp.abspath(LIBDIR)
+    sys.path.insert(0, LIBDIR)
+else:
+    # ... for source tree.
+    sys.path.insert(0, osp.dirname(osp.realpath(__file__)))
+
+# pragma pylint: disable=import-error
+from setenv import add_path, get_lib_dir
+
+# pragma pylint: disable=unused-argument
+def set_env():
+    """
+    Set up environment.
+
+    Arguments:
+        args: launch parameters (dictionary)
+    添加asterstudy库
+    """
+    root_dir = os.getenv("ASTERSTUDY_ROOT_DIR")
+    python_version = "python%d.%d" % sys.version_info[0:2]
+    add_path(os.path.join(root_dir, get_lib_dir(), python_version,
+                          "site-packages"), "PYTHONPATH")
+
+# pragma pylint: disable=too-many-branches,too-many-locals
+def main():
+    #添加asterstudy库
+    set_env()
+    
+    """Main function."""
+    try:
+        from asterstudy.common import CFG, debug_mode, enable_except_hook, version
+        from asterstudy.datamodel import init_default_engine, Engine
+        print('before from asterstudy.gui.asterstdgui import AsterStdGui')
+        from asterstudy.gui.asterstdgui import AsterStdGui
+        from asterstudy.gui.salomegui import AsterSalomeGui
+        print('after from asterstudy.gui.asterstdgui import AsterStdGui')
+    except ImportError as err:
+        print('abort: could not find or load astergui libraries in [%s]' % ' '.join(sys.path),
+              file=sys.stderr)
+        print('(check your install and PYTHONPATH)', file=sys.stderr)
+        if int(os.getenv('DEBUG', '0')):
+            print('ERROR: %s' % err, file=sys.stderr)
+            traceback.print_exc()
+        return -1
+
+    description = 'NO salome mode'
+    formatter = lambda prog: argparse.ArgumentDefaultsHelpFormatter(prog, max_help_position=50,
+                                                                    width=120)
+    parser = argparse.ArgumentParser(formatter_class=formatter, description=description)
+    parser.add_argument('-v', '--version', action='version',
+                        version='%(prog)s {}'.format(version()))
+    args = parser.parse_args()
+
+    if args.debug:
+        debug_mode.DEBUG = 1
+
+    if not args.noexhook:
+        enable_except_hook(True)
+    else:
+        try:
+            import ptvsd # pragma pylint: disable=import-error
+            ptvsd.enable_attach(address=('127.0.0.1', 3000))
+            # ptvsd.wait_for_attach() # uncomment these lines for debugging
+            # ptvsd.break_into_debugger()
+        except: # pragma pylint: disable=bare-except
+            pass
+
+    from PyQt5.Qt import QApplication, QLibraryInfo, QTranslator,QWidget
+
+    # Initialize application and settings
+    app = QApplication(sys.argv)
+    app.setOrganizationName('APP')
+    app.setOrganizationDomain('AMD')
+    app.setApplicationName('Tanksimulator')
+
+    # initialize engine
+    init_default_engine(Engine.AsRun)
+
+    # Activate GUI and show main window
+    print('Activate GUI and show main window')
+    asgui = AsterStdGui()
+    # asgui = AsterSalomeGui()
+    asgui.initialize()
+    print('asgui.initialize()')
+    asgui.mainWindow().show()
+
+    # Start event loop
+    return app.exec_()
+
+if __name__ == '__main__':
+    sys.exit(main())
